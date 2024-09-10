@@ -460,6 +460,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		gasRefund = st.refundGas(params.RefundQuotientEIP3529)
 	}
 	effectiveTip := msg.GasPrice
+	
 	if rules.IsLondon {
 		effectiveTip = cmath.BigMin(msg.GasTipCap, new(big.Int).Sub(msg.GasFeeCap, st.evm.Context.BaseFee))
 	}

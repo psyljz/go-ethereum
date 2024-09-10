@@ -74,6 +74,9 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		err     error
 	)
 	context = NewEVMBlockContext(header, p.chain, nil)
+
+
+	// create a new EVM instance with the given config
 	vmenv := vm.NewEVM(context, vm.TxContext{}, statedb, p.config, cfg)
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
 		ProcessBeaconBlockRoot(*beaconRoot, vmenv, statedb)
@@ -83,6 +86,8 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	}
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
+
+		// convert the transaction to a message
 		msg, err := TransactionToMessage(tx, signer, header.BaseFee)
 		if err != nil {
 			return nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
