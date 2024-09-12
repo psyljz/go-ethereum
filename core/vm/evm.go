@@ -216,6 +216,8 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		if witness := evm.StateDB.Witness(); witness != nil {
 			witness.AddCode(code)
 		}
+
+		//. That’s why low level calls in Solidity return success and you have to verify if the address is a smart contract yourself
 		if len(code) == 0 {
 			ret, err = nil, nil // gas is unchanged
 		} else {
@@ -439,10 +441,12 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	if evm.depth > int(params.CallCreateDepth) {
 		return nil, common.Address{}, gas, ErrDepth
 	}
+	// check msg.sender have enough balance to transfer
 	if !evm.Context.CanTransfer(evm.StateDB, caller.Address(), value) {
 		return nil, common.Address{}, gas, ErrInsufficientBalance
 	}
 	nonce := evm.StateDB.GetNonce(caller.Address())
+	// check msg.sender nonce is not overflow
 	if nonce+1 < nonce {
 		return nil, common.Address{}, gas, ErrNonceUintOverflow
 	}
@@ -471,6 +475,9 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	// Create a new account on the state only if the object was not present.
 	// It might be possible the contract code is deployed to a pre-existent
 	// account with non-zero balance.
+
+	// Snapshot the state before creating the contract to avoid race condition.
+	// every time you invoke a call, create smart contract, or call external contract, you need to snapshot the state	
 	snapshot := evm.StateDB.Snapshot()
 	if !evm.StateDB.Exist(address) {
 		evm.StateDB.CreateAccount(address)
@@ -484,11 +491,17 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	if evm.chainRules.IsEIP158 {
 		evm.StateDB.SetNonce(address, 1)
 	}
+	// transfer value from msg.sender to contract address
 	evm.Context.Transfer(evm.StateDB, caller.Address(), address, value)
 
 	// Initialise a new contract and set the code that is to be used by the EVM.
 	// The contract is a scoped environment for this execution context only.
+
+	// return the bytes of the code that is to be used by the EVM
 	contract := NewContract(caller, AccountRef(address), value, gas)
+
+
+
 	contract.SetCodeOptionalHash(&address, codeAndHash)
 	contract.IsDeployment = true
 
@@ -533,7 +546,12 @@ func (evm *EVM) initNewContract(contract *Contract, address common.Address, valu
 			return ret, ErrCodeStoreOutOfGas
 		}
 	} else {
+		
 		// Contract creation completed, touch the missing fields in the contract
+		// evm.AccessEvents.AddAccount(address, true) 
+		// is the gas used to add the contract address to the access list 
+		// evm.AccessEvents.CodeChunksRangeGas(address, 0, uint64(len(ret)), uint64(len(ret)), true)
+		// is the gas used to add the code chunks to the access list
 		if !contract.UseGas(evm.AccessEvents.AddAccount(address, true), evm.Config.Tracer, tracing.GasChangeWitnessContractCreation) {
 			return ret, ErrCodeStoreOutOfGas
 		}
