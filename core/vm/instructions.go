@@ -757,6 +757,7 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byt
 	if interpreter.readOnly && !value.IsZero() {
 		return nil, ErrWriteProtection
 	}
+	// free gas 2300
 	if !value.IsZero() {
 		gas += params.CallStipend
 	}
